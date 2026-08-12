@@ -100,7 +100,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
 
 // Start at CASITA view: looking from +X (theta=0, phi=π/2)
-const spherical = new THREE.Spherical(110, Math.PI / 2, -Math.PI / 2);
+const spherical = new THREE.Spherical(150, Math.PI / 2, -Math.PI / 2);
 function camFromSpherical() {
   camera.position.setFromSpherical(spherical);
   camera.lookAt(0, 0, 0);
@@ -142,7 +142,7 @@ window.addEventListener('mouseup', () => dragging = false);
 
 renderer.domElement.addEventListener('wheel', e => {
   spherical.radius *= 1 + e.deltaY * 0.001;
-  spherical.radius = Math.max(8, Math.min(120, spherical.radius));
+  spherical.radius = Math.max(8, Math.min(200, spherical.radius));
   camFromSpherical();
 }, {passive: true});
 
