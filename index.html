@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CASITA · GATITO</title>
+<title>MAPA DEL TESORO</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #06060f; overflow: hidden; font-family: 'Courier New', monospace; color: #dde; }
@@ -142,7 +142,7 @@ window.addEventListener('mouseup', () => dragging = false);
 
 renderer.domElement.addEventListener('wheel', e => {
   spherical.radius *= 1 + e.deltaY * 0.001;
-  spherical.radius = Math.max(8, Math.min(200, spherical.radius));
+  spherical.radius = Math.max(8, Math.min(180, spherical.radius));
   camFromSpherical();
 }, {passive: true});
 
