@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CASITA · GATITO</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #06060f; overflow: hidden; font-family: 'Courier New', monospace; color: #dde; }
+  canvas { display: block; }
+
+
+</style>
+</head>
+<body>
+
+
+<script type="importmap">
+{ "imports": { "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ─── 5×7 pixel font ──────────────────────────────────────────────────────────
+const FONT = {
+  A: [0b01110,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001],
+  C: [0b01110,0b10001,0b10000,0b10000,0b10000,0b10001,0b01110],
+  G: [0b01110,0b10001,0b10000,0b10111,0b10001,0b10001,0b01110],
+  I: [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b11111],
+  O: [0b01110,0b10001,0b10001,0b10001,0b10001,0b10001,0b01110],
+  S: [0b01111,0b10000,0b10000,0b01110,0b00001,0b00001,0b11110],
+  T: [0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100],
+};
+
+const GLYPH_W = 5, GLYPH_H = 7, GAP = 1;
+
+function wordPixelsByRow(word) {
+  const byRow = Array.from({length: GLYPH_H}, () => []);
+  for (let ci = 0; ci < word.length; ci++) {
+    const glyph = FONT[word[ci]];
+    const xOff = ci * (GLYPH_W + GAP);
+    for (let r = 0; r < GLYPH_H; r++) {
+      for (let b = 0; b < GLYPH_W; b++) {
+        if (glyph[r] & (1 << (GLYPH_W - 1 - b))) {
+          byRow[r].push(xOff + b);
+        }
+      }
+    }
+  }
+  const totalCols = word.length * (GLYPH_W + GAP) - GAP;
+  return { byRow, totalCols };
+}
+
+// ─── Build 3D points ──────────────────────────────────────────────────────────
+// Convention:
+//   Looking from +X toward origin (seeing YZ plane) → CASITA
+//     y = row, z = casita pixel col
+//   Looking from +Z toward origin (seeing XY plane) → GATITO
+//     x = gatito pixel col, y = row
+//
+// So each 3D point = ( gatito_col, row, casita_col )
+// For each row, we take the CARTESIAN PRODUCT of casita cols × gatito cols.
+
+const casita = wordPixelsByRow('CASITA');
+const gatito = wordPixelsByRow('GATITO');
+
+// Centre offsets
+const cOffZ  = -(casita.totalCols - 1) / 2;   // CASITA centres along Z
+const gOffX  = -(gatito.totalCols - 1) / 2;   // GATITO centres along X
+const yOff   = -(GLYPH_H - 1) / 2;
+
+const SCALE = 1.0;   // world units per pixel
+
+const positions = [];
+
+for (let row = 0; row < GLYPH_H; row++) {
+  const cCols = casita.byRow[row];
+  const gCols = gatito.byRow[row];
+  for (const cz of cCols) {
+    for (const gx of gCols) {
+      const x = (gx + gOffX) * SCALE;
+      const y = -(row + yOff) * SCALE;
+      const z = (cz + cOffZ) * SCALE;
+      positions.push(x, y, z);
+    }
+  }
+}
+
+console.log(`Total points: ${positions.length / 3}`);
+
+// ─── Three.js ─────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x06060f);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 500);
+
+// Start at CASITA view: looking from +X (theta=0, phi=π/2)
+const spherical = new THREE.Spherical(52, Math.PI / 2, -Math.PI / 2);
+function camFromSpherical() {
+  camera.position.setFromSpherical(spherical);
+  camera.lookAt(0, 0, 0);
+}
+camFromSpherical();
+
+// Point cloud
+const geom = new THREE.BufferGeometry();
+geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+const mat = new THREE.PointsMaterial({
+  size: 0.28,
+  color: new THREE.Color('#b0a0ff'),
+  sizeAttenuation: true,
+  transparent: true,
+  opacity: 0.9,
+});
+
+scene.add(new THREE.Points(geom, mat));
+
+// Faint axis helpers (very subtle, just for orientation)
+// Not added — keep it clean
+
+// ─── Orbit controls ───────────────────────────────────────────────────────────
+let dragging = false, prev = {x:0,y:0};
+
+renderer.domElement.addEventListener('mousedown', e => {
+  dragging = true; prev = {x: e.clientX, y: e.clientY};
+});
+renderer.domElement.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  spherical.theta -= (e.clientX - prev.x) * 0.007;
+  spherical.phi   -= (e.clientY - prev.y) * 0.007;
+  spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+  prev = {x: e.clientX, y: e.clientY};
+  camFromSpherical();
+});
+window.addEventListener('mouseup', () => dragging = false);
+
+renderer.domElement.addEventListener('wheel', e => {
+  spherical.radius *= 1 + e.deltaY * 0.001;
+  spherical.radius = Math.max(8, Math.min(120, spherical.radius));
+  camFromSpherical();
+}, {passive: true});
+
+// Touch
+let touch0 = null;
+renderer.domElement.addEventListener('touchstart', e => {
+  touch0 = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+});
+renderer.domElement.addEventListener('touchmove', e => {
+  if (!touch0) return;
+  spherical.theta -= (e.touches[0].clientX - touch0.x) * 0.007;
+  spherical.phi   -= (e.touches[0].clientY - touch0.y) * 0.007;
+  spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+  touch0 = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+  camFromSpherical();
+});
+window.addEventListener('touchend', () => touch0 = null);
+
+
+
+// ─── Render loop ──────────────────────────────────────────────────────────────
+let last = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
